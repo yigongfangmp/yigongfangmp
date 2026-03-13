@@ -1681,11 +1681,17 @@
 
                 async function changeOrderStatus(orderId, currentStatus, contactRaw) {
             window.tempStatusResolveValue = null;
-            const optionsHtml = Object.keys(ORDER_STATUS_MAP).map(key => `<div style="padding: 12px; border-bottom: 1px solid var(--divider); color: ${key===currentStatus ? 'var(--accent-color)' : 'var(--text-primary)'}; font-weight: ${key===currentStatus ? 'bold' : 'normal'}; cursor: pointer;" onclick="event.stopPropagation(); window.tempStatusResolveValue='${key}'; closeCustomModal();">${ORDER_STATUS_MAP[key]}</div>`).join('');
             
+            // 【核心修复 1】：点击时立刻将 overflow 设为 hidden，瞬间强杀 iOS 的滚动惯性
+            const optionsHtml = Object.keys(ORDER_STATUS_MAP).map(key => 
+                `<div style="padding: 12px; border-bottom: 1px solid var(--divider); color: ${key===currentStatus ? 'var(--accent-color)' : 'var(--text-primary)'}; font-weight: ${key===currentStatus ? 'bold' : 'normal'}; cursor: pointer;" 
+                onclick="event.stopPropagation(); const box = document.getElementById('temp-scroll-box'); if(box) box.style.overflow='hidden'; window.tempStatusResolveValue='${key}'; closeCustomModal();">${ORDER_STATUS_MAP[key]}</div>`
+            ).join('');
+            
+            // 【核心修复 2】：移除容易引发 Bug 的 -webkit-overflow-scrolling，改用标准 overscroll-behavior
             await showModal({ 
                 title: '修改追踪状态', 
-                desc: `<div style="text-align:center; max-height: 200px; overflow-y:auto; -webkit-overflow-scrolling: touch;">${optionsHtml}</div>`, 
+                desc: `<div id="temp-scroll-box" style="text-align:center; max-height: 200px; overflow-y:auto; overscroll-behavior: contain;">${optionsHtml}</div>`, 
                 type: 'confirm', 
                 confirmText: '暂不修改',
                 cancelText: '关闭窗口'
@@ -1705,18 +1711,19 @@
                     if (!response.ok) throw new Error();
                     showToast('状态已更新', 'success');
                     
-                    // 【关键修复点 1】：加上 await，确保列表重新渲染彻底完成
                     await openOrdersPanel(true);
                     
-                    // 【关键修复点 2】：打断施法，强制 iOS 重新构建这个区域的滚动上下文
+                    // 【核心修复 3】：代码级模拟“锁屏再亮屏”，用 display 切换强迫浏览器重置滚动树
                     setTimeout(() => {
-                        const scroller = document.querySelector('#orders-panel .cart-content');
-                        if (scroller) {
-                            scroller.style.overflowY = 'hidden'; // 先隐藏滚动
-                            scroller.offsetHeight; // 强制浏览器重排 (Reflow)
-                            scroller.style.overflowY = 'auto'; // 再恢复滚动，激活引擎
+                        const panelScroll = document.querySelector('#orders-panel .cart-content');
+                        if (panelScroll) {
+                            const currentScroll = panelScroll.scrollTop;
+                            panelScroll.style.display = 'none'; // 瞬间隐藏
+                            panelScroll.offsetHeight;           // 强制触发重绘 (Reflow)
+                            panelScroll.style.display = 'block';// 瞬间恢复
+                            panelScroll.scrollTop = currentScroll;
                         }
-                    }, 50);
+                    }, 20);
 
                 } catch(e) { showToast('更新失败', 'error'); }
             }
