@@ -2978,6 +2978,54 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             } catch(e) { console.warn(e); } 
         }
 
+        // --- 新增：自动查询普通用户的历史订单数量并显示角标 ---
+        window.updateUserOrdersBadge = async function() {
+            if (isAdmin) return; // 老板模式不显示这个角标
+            let lastContact = '';
+            try { lastContact = localStorage.getItem('yigongfang_last_contact'); } catch(e) {}
+            const badge = document.getElementById('user-orders-badge');
+            if (!badge) return;
+            
+            // 如果本地没有记录顾客联系方式，直接隐藏角标
+            if (!lastContact || lastContact.length < 5) {
+                badge.style.display = 'none';
+                return;
+            }
+            
+            try {
+                // 去云端精准查这个手机号/微信号下有几个单子
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?contact=like.*${encodeURIComponent(lastContact)}*&select=id`, { 
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } 
+                });
+                if (response.ok) {
+                    const orders = await response.json();
+                    if (orders.length > 0) {
+                        badge.innerText = orders.length > 99 ? '99+' : orders.length;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch(e) { console.warn('Badge fetch failed'); }
+        };
+
+        // --- 拦截底层提交逻辑：每次成功下完单/搜完单，自动刷新一次数字 ---
+        const originalProcessOrder = window.processOrderSubmission;
+        if (originalProcessOrder) {
+            window.processOrderSubmission = async function(...args) {
+                await originalProcessOrder(...args);
+                setTimeout(updateUserOrdersBadge, 1000); // 提交完等1秒云端写入后刷新角标
+            };
+        }
+        const originalQueryOrders = window.queryUserOrders;
+        if (originalQueryOrders) {
+            window.queryUserOrders = async function(...args) {
+                await originalQueryOrders(...args);
+                updateUserOrdersBadge(); // 手动输入号码找回后，顺便更新角标
+            };
+        }
+
+        // --- 原有的页面加载逻辑 ---
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 if (isWeChat) document.documentElement.classList.add('is-wechat');
@@ -3003,6 +3051,9 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
                 updateCart(); 
                 checkDisclaimer(); 
                 initImageViewerTouch();
+
+                // 页面打开时，静默查询一次顾客的订单数
+                updateUserOrdersBadge(); 
 
                 await fetchProducts(); 
             } catch (err) {
