@@ -1260,7 +1260,8 @@
         async function processOrderSubmission(itemsArray, contactInfo, remarkInfo, btnId, isFromCart) {
             try { 
                 const lastSubmit = localStorage.getItem('yigongfang_last_submit_time'); 
-                if (lastSubmit && Date.now() - parseInt(lastSubmit) < 5000) { 
+                // 【修复】：补全进制参数
+                if (lastSubmit && Date.now() - parseInt(lastSubmit, 10) < 5000) { 
                     return showToast('提交得太快啦，请稍等再试', 'warning'); 
                 } 
             } catch(e) { console.warn(e); }
@@ -1360,7 +1361,6 @@
                     });
                 } catch(e) { console.warn('Push Error', e); }
 
-                // --- 自动扣库存与售罄下架逻辑 ---
                 try {
                     let stockChanged = false;
                     for (const item of itemsArray) {
@@ -1401,12 +1401,10 @@
                 
                 const qrImgSrc = qrCodeUrl ? escapeHTML(qrCodeUrl) : 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=weixin://contacts/profile/wxid_w5lxkhqtn06w22';
                 const payQrImgSrc = payQrCodeUrl ? escapeHTML(payQrCodeUrl) : 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PayCodeEmpty';
-const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
-                // 拼接专用于付款的极简备注（单号后4位 + 顾客自己填的备注）
+                const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
                 const payRemarkString = remarkInfo ? `尾号${orderNo.slice(-4)} ${remarkInfo}` : `订单尾号${orderNo.slice(-4)}`;
 
                 const finalAction = await showModal({
-                    // 顶部状态：大号成功图标 + 标题
                     title: '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; margin-top: 10px; padding-bottom: 10px;"><div style="width: 52px; height: 52px; background: #07C160; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(7,193,96,0.3);"><svg viewBox="0 0 24 24" width="32" height="32" stroke="#FFF" stroke-width="3" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div style="font-size: 18px; font-weight: 800; color: var(--text-primary); letter-spacing: 0.5px;">订单提交成功</div></div>',
                     desc: `
                     <div style="text-align: left; font-size: 14px; line-height: 1.6; padding: 0 4px;">
@@ -1492,7 +1490,6 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             }
         }
 
-        /* ================= 普通用户找回订单逻辑 (增强版) ================= */
         function openUserOrders() {
             closeAllPanels();
             let lastContact = '';
@@ -1583,7 +1580,6 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             }
         }
 
-        /* ================= 老板专属订单管理与自动清理 ================= */
         let isPolling = false; let globalActiveOrders = []; 
 
         window.setAdminOrderFilter = function(status) {
@@ -1794,6 +1790,7 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             }
         }
 
+        // 【修复点】：防止老板更新物流发货状态时，旧的物流信息被无限重复堆叠追加
         async function changeOrderStatus(orderId, currentStatus, contactRaw) {
             window.tempStatusResolveValue = null;
             
@@ -1838,7 +1835,8 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
                     if (trackingText) {
                         const targetOrder = globalActiveOrders.find(o => String(o.id) === String(orderId));
                         if (targetOrder && targetOrder.content) {
-                            payload.content = targetOrder.content + trackingText;
+                            let baseContent = targetOrder.content.split('\n\n━━━━━━━━━━━━━━\n📦【物流更新】')[0];
+                            payload.content = baseContent + trackingText;
                         }
                     }
 
@@ -2872,6 +2870,7 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             wrapper.innerHTML = html; 
         }
         
+        // 【修复点】：解除 iOS 对弹窗关闭时的触控劫持，避免使用 display: none 导致闪烁
         let isMapLoaded = false;
         let isMapLoading = false;
         function openMapModal() { 
@@ -2906,18 +2905,21 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
         function closeMapModal() { 
             const overlay = document.getElementById('map-modal-overlay');
             if (overlay.classList.contains('active')) {
-                // 【核心修复1】：瞬间隐藏弹窗主体，强行打断地图引擎对 iOS 触摸事件的底层劫持
-                const modalContent = overlay.querySelector('.modal');
-                if (modalContent) modalContent.style.display = 'none';
+                if(window.shopMap) {
+                    window.shopMap.dragging.disable();
+                    window.shopMap.scrollWheelZoom.disable();
+                }
                 
                 overlay.classList.remove('active'); 
                 toggleBodyScroll(); 
                 
-                // 【核心修复2】：给浏览器一点时间解除锁定，再恢复状态并强制对齐滚动条
                 setTimeout(() => {
-                    if (modalContent) modalContent.style.display = '';
                     window.scrollTo(0, scrollPosition);
-                }, 50);
+                    if(window.shopMap) {
+                        window.shopMap.dragging.enable();
+                        window.shopMap.scrollWheelZoom.enable();
+                    }
+                }, 300); 
             }
         }
 
@@ -2978,59 +2980,51 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             } catch(e) { console.warn(e); } 
         }
 
-        // --- 新增：自动查询普通用户的历史订单数量并显示角标 ---
         window.updateUserOrdersBadge = async function() {
-            if (isAdmin) return; // 老板模式不显示这个角标
+            if (isAdmin) return;
             let lastContact = '';
             try { lastContact = localStorage.getItem('yigongfang_last_contact'); } catch(e) {}
             const badge = document.getElementById('user-orders-badge');
             if (!badge) return;
             
-            // 如果本地没有记录顾客联系方式，直接隐藏角标
             if (!lastContact || lastContact.length < 5) {
                 badge.style.display = 'none';
                 return;
             }
             
             try {
-                // 去云端拉取该用户的订单状态
                 const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?contact=like.*${encodeURIComponent(lastContact)}*&select=id,contact`, { 
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } 
                 });
                 if (response.ok) {
                     const orders = await response.json();
-                    
-                    // 核心修改：只统计状态为 [new] (即老板还未处理的待处理状态) 的订单
                     const unprocessedCount = orders.filter(o => o.contact && o.contact.startsWith('[new]')).length;
                     
                     if (unprocessedCount > 0) {
                         badge.innerText = unprocessedCount > 99 ? '99+' : unprocessedCount;
                         badge.style.display = 'flex';
                     } else {
-                        // 如果全是老板处理过的单子，或者根本没单子，直接隐藏角标
                         badge.style.display = 'none';
                     }
                 }
             } catch(e) { console.warn('Badge fetch failed'); }
         };
 
-        // --- 拦截底层提交逻辑：每次成功下完单/搜完单，自动刷新一次数字 ---
         const originalProcessOrder = window.processOrderSubmission;
         if (originalProcessOrder) {
             window.processOrderSubmission = async function(...args) {
                 await originalProcessOrder(...args);
-                setTimeout(updateUserOrdersBadge, 1000); // 提交完等1秒云端写入后刷新角标
+                setTimeout(updateUserOrdersBadge, 1000); 
             };
         }
         const originalQueryOrders = window.queryUserOrders;
         if (originalQueryOrders) {
             window.queryUserOrders = async function(...args) {
                 await originalQueryOrders(...args);
-                updateUserOrdersBadge(); // 手动输入号码找回后，顺便更新角标
+                updateUserOrdersBadge(); 
             };
         }
 
-        // --- 原有的页面加载逻辑 ---
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 if (isWeChat) document.documentElement.classList.add('is-wechat');
@@ -3057,8 +3051,10 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
                 checkDisclaimer(); 
                 initImageViewerTouch();
 
-                // 页面打开时，静默查询一次顾客的订单数
                 updateUserOrdersBadge(); 
+
+                // 【修复点】：利用事件队列强制重写 HTML 里残留的多余函数，完美实现不删 HTML 代码也能消灭其隐患的效果
+                setTimeout(() => { window.checkout = checkout; }, 50);
 
                 await fetchProducts(); 
             } catch (err) {
