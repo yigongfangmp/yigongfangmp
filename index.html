@@ -2993,16 +2993,21 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
             }
             
             try {
-                // 去云端精准查这个手机号/微信号下有几个单子
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?contact=like.*${encodeURIComponent(lastContact)}*&select=id`, { 
+                // 去云端拉取该用户的订单状态
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/orders?contact=like.*${encodeURIComponent(lastContact)}*&select=id,contact`, { 
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } 
                 });
                 if (response.ok) {
                     const orders = await response.json();
-                    if (orders.length > 0) {
-                        badge.innerText = orders.length > 99 ? '99+' : orders.length;
+                    
+                    // 核心修改：只统计状态为 [new] (即老板还未处理的待处理状态) 的订单
+                    const unprocessedCount = orders.filter(o => o.contact && o.contact.startsWith('[new]')).length;
+                    
+                    if (unprocessedCount > 0) {
+                        badge.innerText = unprocessedCount > 99 ? '99+' : unprocessedCount;
                         badge.style.display = 'flex';
                     } else {
+                        // 如果全是老板处理过的单子，或者根本没单子，直接隐藏角标
                         badge.style.display = 'none';
                     }
                 }
