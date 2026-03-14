@@ -1419,7 +1419,10 @@ const depositAmount = totalCents > 100000 ? 100 : (totalCents > 0 ? 50 : 0);
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                                     <div>
                                         <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">凭证单号</div>
-                                        <div style="font-size: 15px; font-family: monospace; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px;">${orderNo}</div>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <div style="font-size: 15px; font-family: monospace; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px;">${orderNo}</div>
+                                            <button onclick="copyAnyText('${orderNo}')" style="background: var(--accent-bg); color: var(--accent-color); border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">复制单号</button>
+                                        </div>
                                     </div>
                                     <div style="text-align: right;">
                                         <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">清单总计</div>
