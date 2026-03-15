@@ -3804,6 +3804,298 @@ function getUsedCarCategories() {
             document.getElementById('admin-overlay').classList.add('active');
             toggleBodyScroll();
         };
+        /* ========================================================= */
+        /* ============ 全区域二级分类独立管理系统补丁 ============ */
+        /* ========================================================= */
+
+        // 1. 拦截数据解析：智能关联二级分类与对应的主栏目
+        const _originalParseFetchedData_SubCats = window.parseFetchedData;
+        window.parseFetchedData = function(allData) {
+            _originalParseFetchedData_SubCats(allData);
+            
+            // 提取所有带有 __category__ 前缀的分类数据，并拆分出它属于哪个主栏目
+            const rawCustomCats = allData.filter(p => p.category && p.category.startsWith('__category__'));
+            window.customCategories = rawCustomCats.map(p => {
+                let zoneId = 'parts'; // 默认老数据属于配件区
+                if (p.category.length > 12) { 
+                    zoneId = p.category.substring(12); // 提取如 __category__zone_123 里的 zone_123
+                }
+                return { id: `custom_${p.id}`, name: p.name, dbId: p.id, zoneId: zoneId };
+            });
+
+            // 确保这些分类锚点不会被当做商品渲染出来
+            products = products.filter(p => !(p.category && p.category.startsWith('__category__')));
+        };
+
+        // 2. 覆盖：渲染全区域的子分类过滤条
+        window.initFiltersDOM = function() {
+            const filterBar = document.getElementById('filter-bar');
+            if (!filterBar) return;
+            
+            let html = '';
+            let subCats = [];
+
+            // 提取当前大区下的所有二级分类
+            if (currentZone === 'parts') {
+                const visibleDefaultCats = categories.filter(c => c.id !== 'all' && !(window.deletedCategoryIds || []).includes(c.id));
+                const customPartsCats = (window.customCategories || []).filter(c => c.zoneId === 'parts');
+                subCats = [...visibleDefaultCats, ...customPartsCats];
+            } else if (currentZone === 'used_cars') {
+                const usedCats = getUsedCarCategories().filter(c => c.id !== 'used_all' && !(window.deletedCategoryIds || []).includes(c.id));
+                const customUsedCats = (window.customCategories || []).filter(c => c.zoneId === 'used_cars');
+                const merged = [...usedCats];
+                customUsedCats.forEach(cc => { if(!merged.some(u => u.name === cc.name)) merged.push(cc); });
+                subCats = merged;
+            } else {
+                subCats = (window.customCategories || []).filter(c => c.zoneId === currentZone);
+            }
+
+            // 获取当前选中的高亮分类ID
+            let activeCatId = 'all';
+            if (currentZone === 'parts') activeCatId = currentCategory;
+            else if (currentZone === 'used_cars') activeCatId = currentUsedCategory === 'used_all' ? 'all' : currentUsedCategory;
+            else activeCatId = window.currentCustomCategory || 'all';
+
+            // 渲染“全部”按钮
+            html += `<button class="filter-btn ${activeCatId === 'all' ? 'active' : ''}" data-id="all" onclick="setFilter('all')">全部</button>`;
+
+            // 渲染动态分类按钮
+            subCats.forEach(cat => {
+                const isActive = activeCatId === cat.id;
+                const delBtn = isAdmin ? `<span style="margin-left: 6px; font-size: 16px; line-height: 1; opacity: 0.5; cursor: pointer; padding: 0 2px;" onclick="event.stopPropagation(); showDeleteCategoryModal('${escapeJS(cat.id)}')">×</span>` : '';
+                html += `<button class="filter-btn ${isActive ? 'active' : ''}" data-id="${cat.id}" onclick="setFilter('${escapeJS(cat.id)}')">${escapeHTML(cat.name)}${delBtn}</button>`;
+            });
+
+            // 任何大区都允许老板添加分类
+            if (isAdmin) {
+                html += `<button class="filter-btn" style="border: 1px dashed var(--text-secondary); color: var(--text-secondary); padding: 6px 12px; background: transparent;" onclick="addNewCategory()">➕ 添加分类</button>`;
+            }
+            
+            filterBar.innerHTML = html;
+            setTimeout(() => { 
+                const activeBtn = document.querySelector('.filter-btn.active'); 
+                if (activeBtn && window.innerWidth <= 768) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); 
+            }, 100);
+        };
+
+        // 3. 覆盖：全域分类点击逻辑
+        window.setFilter = function(id) {
+            triggerHaptic();
+            if (currentZone === 'parts') {
+                currentCategory = id;
+                try { sessionStorage.setItem('yigongfang_category', id); } catch(e){}
+            } else if (currentZone === 'used_cars') {
+                currentUsedCategory = id === 'all' ? 'used_all' : id;
+                try { sessionStorage.setItem('yigongfang_used_category', currentUsedCategory); } catch(e){}
+            } else {
+                window.currentCustomCategory = id; // 自定义大区的选中状态存于内存
+            }
+            initFiltersDOM();
+            applyDOMFilter();
+        };
+
+        // 4. 覆盖：为任意主分类添加二级分类
+        window.addNewCategory = async function() {
+            if (!isAdmin) return;
+            
+            // 获取当前大区的中文字称
+            let zoneNameStr = currentZone === 'parts' ? '改装配件' : (currentZone === 'used_cars' ? '二手整车' : '');
+            if (!zoneNameStr) {
+                const z = (window.customZones || []).find(x => x.id === currentZone);
+                zoneNameStr = z ? z.name : '当前栏目';
+            }
+
+            const newCatName = await showModal({ 
+                title: '添加新分类', 
+                desc: `正在为【${escapeHTML(zoneNameStr)}】添加分类选项：`, 
+                type: 'prompt', 
+                inputType: 'text',
+                inputPlaceholder: '分类名称限制8个字内',
+                confirmText: '确认添加' 
+            });
+            
+            if (newCatName && newCatName !== 'close') {
+                const name = newCatName.trim();
+                if (!name) return showToast('分类名称不能为空', 'warning');
+                
+                const existing = (window.customCategories || []).filter(c => c.zoneId === currentZone);
+                if (existing.some(c => c.name === name)) {
+                    return showToast('该分类已存在，请换个名字', 'warning');
+                }
+                
+                showToast('正在创建...', 'info');
+                try {
+                    // 数据入库标识：如果是配件区用老的 __category__，其他区用 __category__ + zoneId
+                    const catType = currentZone === 'parts' ? '__category__' : '__category__' + currentZone;
+                    const dbPayload = { name: name, category: catType, price: 0, in_stock: true, image_url: '' }; 
+                    
+                    const response = await fetch(`${SUPABASE_URL}/rest/v1/products`, { 
+                        method: 'POST', 
+                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify(dbPayload) 
+                    }); 
+                    if (!response.ok) throw new Error('添加失败'); 
+                    
+                    showToast('分类添加成功', 'success'); 
+                    try { localStorage.removeItem('ygf_products_cache'); } catch(e) {} 
+                    await fetchProducts(); 
+                } catch(e) { showToast('添加失败', 'error'); }
+            }
+        };
+
+        // 5. 覆盖：删除任意主分类下的二级分类
+        window.showDeleteCategoryModal = async function(catId) {
+            let cat = (window.customCategories || []).find(c => c.id === catId);
+            let isDefault = false;
+            
+            if (!cat) {
+                cat = categories.find(c => c.id === catId);
+                if (!cat) cat = getUsedCarCategories().find(c => c.id === catId);
+                if (cat) isDefault = true;
+            }
+            if (!cat) return;
+
+            const confirmed = await showModal({
+                title: '删除分类',
+                desc: `确定要删除选项 <b style="color:var(--text-primary);">“${escapeHTML(cat.name)}”</b> 吗？<br><span style="font-size:12px;color:var(--accent-color);display:block;margin-top:6px;">注意：删除分类不会下架商品，仅隐藏该按钮。</span>`,
+                confirmText: '确认删除',
+                cancelText: '取消'
+            });
+            
+            if (confirmed === true) {
+                showToast('正在删除...', 'info');
+                try {
+                    if (isDefault) {
+                        const dbPayload = { name: cat.id, category: '__deleted_category__', price: 0, in_stock: false, image_url: '' };
+                        await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+                            method: 'POST',
+                            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(dbPayload)
+                        });
+                    } else {
+                        await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${cat.dbId}`, { 
+                            method: 'DELETE', 
+                            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } 
+                        });
+                    }
+                    
+                    showToast('分类已删除', 'success');
+                    if (currentCategory === catId) currentCategory = 'all';
+                    if (currentUsedCategory === catId) currentUsedCategory = 'used_all';
+                    if (window.currentCustomCategory === catId) window.currentCustomCategory = 'all';
+
+                    try { localStorage.removeItem('ygf_products_cache'); } catch(e) {} 
+                    await fetchProducts(); 
+                } catch(e) { showToast('删除失败', 'error'); }
+            }
+        };
+
+        // 6. 覆盖：卡片过滤核心逻辑（智能识别商品所属主栏目与二级分类）
+        window.applyDOMFilter = function() {
+            const cards = document.querySelectorAll('#products-grid .card:not(.skeleton)');
+            const emptyMsg = document.getElementById('empty-state-msg');
+            let visibleCount = 0;
+            const kw = document.getElementById('global-search').value.trim().toLowerCase();
+
+            let activeCatId = 'all';
+            if (currentZone === 'parts') activeCatId = currentCategory;
+            else if (currentZone === 'used_cars') activeCatId = currentUsedCategory === 'used_all' ? 'all' : currentUsedCategory;
+            else activeCatId = window.currentCustomCategory || 'all';
+
+            cards.forEach(card => {
+                const cat = card.getAttribute('data-category') || '';
+                const nameStr = card.getAttribute('data-name') || '';
+                
+                let cardZone = 'parts';
+                if (cat.startsWith('zone_')) {
+                    cardZone = cat; // 没分子分类，直接挂在主栏目的商品
+                } else if (cat.startsWith('used_')) {
+                    cardZone = 'used_cars';
+                } else {
+                    // 查询它是不是某个主分类下的子分类
+                    const customCatObj = (window.customCategories || []).find(c => c.id === cat);
+                    if (customCatObj) {
+                        cardZone = customCatObj.zoneId;
+                    }
+                }
+
+                let match = false;
+                if (cardZone === currentZone) {
+                    if (activeCatId === 'all') match = true;
+                    else match = (cat === activeCatId);
+                }
+
+                if (match && kw && !nameStr.includes(kw)) { match = false; }
+
+                if (match) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            const isSkeleton = document.querySelector('#products-grid .skeleton') !== null;
+            if (emptyMsg) {
+                emptyMsg.style.display = (visibleCount === 0 && !isSkeleton) ? 'block' : 'none';
+                emptyMsg.innerText = kw ? "暂未搜索到相关商品" : "该分类下暂无商品，待老板上新~";
+            }
+        };
+
+        // 7. 覆盖：上架面板分类下拉框，支持读取新创建的二级分类
+        const _originalToggleAdminFormType_SubCats = window.toggleAdminFormType;
+        window.toggleAdminFormType = function() {
+            const type = document.getElementById('new-item-type').value; 
+            const catSelect = document.getElementById('new-category');
+            const customInput = document.getElementById('custom-category-input');
+            const configGroup = document.getElementById('config-group');
+            const nameLabel = document.getElementById('label-name');
+
+            if (type === 'part' || type === 'used_car') {
+                _originalToggleAdminFormType_SubCats(); // 调用原有逻辑
+            } else {
+                // 自定义主栏目时的上架表单适配
+                customInput.style.display = 'none';
+                customInput.required = false;
+                configGroup.style.display = 'none';
+                nameLabel.innerText = "商品名称";
+                if (!document.getElementById('edit-product-id').value) document.getElementById('new-stock').value = 99;
+                
+                // 核心：读取该主栏目下的二级分类填入下拉菜单
+                const customZoneCats = (window.customCategories || []).filter(c => c.zoneId === type);
+                if (customZoneCats.length > 0) {
+                    catSelect.innerHTML = `<option value="${type}">-- 直接放在大类下 (无细分) --</option>` + 
+                                          customZoneCats.map(cat => `<option value="${cat.id}">${escapeHTML(cat.name)}</option>`).join('');
+                } else {
+                    catSelect.innerHTML = `<option value="${type}">-- 暂无子分类，直接上架 --</option>`;
+                }
+                toggleStockLabel(document.getElementById('new-instock').checked);
+            }
+        };
+
+        // 8. 覆盖：商品编辑时，让下拉框能正确回显自定义子分类
+        const _originalOpenEditAdmin_SubCats = window.openEditAdmin;
+        window.openEditAdmin = function(id) {
+            if (!isAdmin) return;
+            const product = products.find(p => String(p.id) === String(id));
+            if (!product) return;
+            
+            _originalOpenEditAdmin_SubCats(id); // 先走一轮原有逻辑初始化面板
+
+            // 额外修复：如果是自定义二级分类的商品，纠正它的主分类和子分类下拉状态
+            const customCatObj = (window.customCategories || []).find(c => c.id === product.category);
+            if (customCatObj) {
+                // 第一步：选对大区类型（如：选中某自定义主栏目）
+                const targetZone = customCatObj.zoneId === 'parts' ? 'part' : (customCatObj.zoneId === 'used_cars' ? 'used_car' : customCatObj.zoneId);
+                document.getElementById('new-item-type').value = targetZone;
+                
+                // 第二步：触发下拉刷新，加载对应大区下的子分类
+                toggleAdminFormType();
+                
+                // 第三步：选中它的细分种类
+                document.getElementById('new-category').value = customCatObj.id;
+            }
+        };
     </script>
 </body>
 </html>
