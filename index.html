@@ -3487,6 +3487,323 @@ function getUsedCarCategories() {
                 } catch(e) { showToast('保存失败', 'error'); }
             }
         }
+        /* ========================================================= */
+        /* ============ 主分类(顶部大栏目)动态管理核心补丁 ============ */
+        /* ========================================================= */
+
+        // 1. 拦截数据解析，分离出老板自定义的【主分类】
+        const _originalParseFetchedData = window.parseFetchedData;
+        window.parseFetchedData = function(allData) {
+            _originalParseFetchedData(allData);
+            
+            // 筛选出属于顶部的自定义主分类
+            const rawZones = allData.filter(p => p.category === '__zone__');
+            window.customZones = rawZones.map(p => ({ id: `zone_${p.id}`, name: p.name, dbId: p.id }));
+            
+            // 将主分类的锚点从普通商品列表里剔除，避免被渲染成商品卡片
+            products = products.filter(p => p.category !== '__zone__');
+            
+            // 渲染最新的顶部导航栏
+            renderZones();
+        };
+
+        // 2. 动态渲染顶部导航栏 (Zone Switcher)
+        window.renderZones = function() {
+            const switcher = document.querySelector('.zone-switcher');
+            if (!switcher) return;
+
+            // 注入横向滚动样式，防止栏目太多挤在一起
+            if (!document.getElementById('zone-scroll-style')) {
+                const style = document.createElement('style');
+                style.id = 'zone-scroll-style';
+                style.innerHTML = `.zone-switcher::-webkit-scrollbar { display: none; } .zone-switcher { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; } .zone-tab { flex-shrink: 0; }`;
+                document.head.appendChild(style);
+            }
+
+            let html = `
+                <div class="zone-tab ${currentZone === 'parts' ? 'active' : ''}" id="tab-parts" onclick="switchZone('parts')">改装配件</div>
+                <div class="zone-tab ${currentZone === 'used_cars' ? 'active' : ''}" id="tab-used" onclick="switchZone('used_cars')">二手整车</div>
+            `;
+
+            (window.customZones || []).forEach(z => {
+                html += `<div class="zone-tab ${currentZone === z.id ? 'active' : ''}" onclick="switchZone('${escapeJS(z.id)}')">
+                    ${escapeHTML(z.name)}
+                    ${isAdmin ? `<span style="margin-left:4px; font-size:16px; opacity:0.5; padding:0 2px;" onclick="event.stopPropagation(); deleteZone('${escapeJS(z.id)}')">×</span>` : ''}
+                </div>`;
+            });
+
+            if (isAdmin) {
+                html += `<div class="zone-tab" style="color:var(--text-secondary); cursor:pointer; font-size: 14px; display:flex; align-items:center;" onclick="addNewZone()">➕ 添新栏目</div>`;
+            }
+
+            switcher.innerHTML = html;
+        };
+
+        // 3. 拦截栏目切换动作，保证 UI 刷新
+        const _originalSwitchZone = window.switchZone;
+        window.switchZone = function(zone) {
+            _originalSwitchZone(zone);
+            renderZones(); // 切换后刷新下划线状态
+        };
+
+        // 4. 新增：添加主分类功能
+        window.addNewZone = async function() {
+            if (!isAdmin) return;
+            const newZoneName = await showModal({
+                title: '添加主分类栏目',
+                desc: '请输入新主分类的名称（如：骑行装备、保养套餐）',
+                type: 'prompt',
+                inputType: 'text',
+                inputPlaceholder: '限制6个字以内',
+                confirmText: '确认添加'
+            });
+
+            if (newZoneName && newZoneName !== 'close') {
+                const name = newZoneName.trim();
+                if (!name) return showToast('栏目名称不能为空', 'warning');
+                if (name.length > 6) return showToast('名称建议不要超过6个字', 'warning');
+
+                if ((window.customZones || []).some(z => z.name === name)) {
+                    return showToast('该分类已存在', 'warning');
+                }
+
+                showToast('正在创建...', 'info');
+                try {
+                    const dbPayload = { name: name, category: '__zone__', price: 0, in_stock: true, image_url: '' };
+                    const response = await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+                        method: 'POST',
+                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dbPayload)
+                    });
+                    if (!response.ok) throw new Error();
+
+                    showToast('主分类添加成功', 'success');
+                    try { localStorage.removeItem('ygf_products_cache'); } catch(e){}
+                    await fetchProducts();
+
+                    // 添加后自动滚动到最右边查看新分类
+                    setTimeout(() => {
+                        const switcher = document.querySelector('.zone-switcher');
+                        if (switcher) switcher.scrollTo({ left: switcher.scrollWidth, behavior: 'smooth' });
+                    }, 500);
+                } catch(e) { showToast('添加失败', 'error'); }
+            }
+        };
+
+        // 5. 新增：删除主分类功能
+        window.deleteZone = async function(zoneId) {
+            if (!isAdmin) return;
+            const zone = (window.customZones || []).find(z => z.id === zoneId);
+            if (!zone) return;
+
+            const confirmed = await showModal({
+                title: '删除主分类',
+                desc: `确定要删除顶部栏目 <b style="color:var(--text-primary);">“${escapeHTML(zone.name)}”</b> 吗？<br><span style="font-size:12px;color:var(--accent-color);display:block;margin-top:6px;">注意：仅删除顶部标签。若该分类下有商品，请先单独下架对应商品。</span>`,
+                confirmText: '确认删除',
+                cancelText: '取消'
+            });
+
+            if (confirmed === true) {
+                showToast('正在删除...', 'info');
+                try {
+                    await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${zone.dbId}`, {
+                        method: 'DELETE',
+                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                    });
+
+                    if (currentZone === zoneId) {
+                        switchZone('parts'); // 如果正停留在被删的栏目，自动跳回配件区
+                    }
+                    showToast('分类已删除', 'success');
+                    try { localStorage.removeItem('ygf_products_cache'); } catch(e){}
+                    await fetchProducts();
+                } catch(e) { showToast('删除失败', 'error'); }
+            }
+        };
+
+        // 6. 拦截子分类过滤条渲染，适配新主分类
+        const _originalInitFiltersDOM = window.initFiltersDOM;
+        window.initFiltersDOM = function() {
+            if (currentZone === 'parts' || currentZone === 'used_cars') {
+                _originalInitFiltersDOM();
+            } else {
+                // 自定义主分类暂不搞二级细分类，给个“全部”按钮占位
+                const filterBar = document.getElementById('filter-bar');
+                filterBar.innerHTML = `<button class="filter-btn active">全部商品</button>`;
+            }
+        };
+
+        // 7. 拦截卡片过滤逻辑，智能识别商品该在哪个大区显示
+        window.applyDOMFilter = function() {
+            const cards = document.querySelectorAll('#products-grid .card:not(.skeleton)');
+            const emptyMsg = document.getElementById('empty-state-msg');
+            let visibleCount = 0;
+            const kw = document.getElementById('global-search').value.trim().toLowerCase();
+
+            cards.forEach(card => {
+                const cat = card.getAttribute('data-category') || '';
+                const nameStr = card.getAttribute('data-name') || '';
+                
+                // 判断卡片归属大区
+                const isUsedCar = cat.startsWith('used_');
+                const isCustomZone = cat.startsWith('zone_');
+                
+                let cardZone = 'parts';
+                if (isUsedCar) cardZone = 'used_cars';
+                else if (isCustomZone) cardZone = cat; 
+
+                let match = false;
+
+                // 只有当卡片所属的大区 = 顶部落焦的大区时，才匹配细分过滤
+                if (cardZone === currentZone) {
+                    if (currentZone === 'parts') {
+                        match = (currentCategory === 'all' || cat === currentCategory);
+                    } else if (currentZone === 'used_cars') {
+                        match = (currentUsedCategory === 'used_all' || cat === currentUsedCategory);
+                    } else {
+                        match = true; // 自定义大区默认直接显示其下全部商品
+                    }
+                }
+
+                // 处理全局搜索
+                if (match && kw && !nameStr.includes(kw)) { match = false; }
+
+                if (match) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            const isSkeleton = document.querySelector('#products-grid .skeleton') !== null;
+            if (emptyMsg) {
+                emptyMsg.style.display = (visibleCount === 0 && !isSkeleton) ? 'block' : 'none';
+                emptyMsg.innerText = kw ? "暂未搜索到相关商品" : "该栏目暂无商品，待老板上新~";
+            }
+        };
+
+        // 8. 拦截老板上架面板，让新的主分类出现在“商品类型”下拉框中
+        const _originalOpenAdmin = window.openAdmin;
+        window.openAdmin = function() {
+            if (!isAdmin) return;
+
+            const typeSelect = document.getElementById('new-item-type');
+            let typeHtml = `<option value="part">改装配件</option><option value="used_car">二手整车</option>`;
+            (window.customZones || []).forEach(z => {
+                typeHtml += `<option value="${z.id}">${escapeHTML(z.name)}</option>`;
+            });
+            typeSelect.innerHTML = typeHtml;
+
+            _originalOpenAdmin();
+
+            // 如果老板是在新大区里点上架，默认帮他选好
+            if (currentZone.startsWith('zone_')) {
+                document.getElementById('new-item-type').value = currentZone;
+                toggleAdminFormType();
+            }
+        };
+
+        // 9. 拦截表单表单形态切换，适配新主分类的上架形态
+        const _originalToggleAdminFormType = window.toggleAdminFormType;
+        window.toggleAdminFormType = function() {
+            const type = document.getElementById('new-item-type').value;
+            const customInput = document.getElementById('custom-category-input');
+            const configGroup = document.getElementById('config-group');
+            const catSelect = document.getElementById('new-category');
+            const nameLabel = document.getElementById('label-name');
+
+            if (type === 'part' || type === 'used_car') {
+                _originalToggleAdminFormType();
+            } else {
+                // 自定义主分类的上架表单样式
+                customInput.style.display = 'none';
+                customInput.required = false;
+                configGroup.style.display = 'none';
+                nameLabel.innerText = "商品名称";
+                if (!document.getElementById('edit-product-id').value) {
+                    document.getElementById('new-stock').value = 99;
+                }
+                catSelect.innerHTML = `<option value="${type}">默认挂载在此主分类下</option>`;
+                toggleStockLabel(document.getElementById('new-instock').checked);
+            }
+        };
+
+        // 10. 拦截编辑按钮逻辑，让自定义主分类里的商品也能正确回显
+        window.openEditAdmin = function(id) {
+            if (!isAdmin) return;
+            closeAllPanels();
+            const product = products.find(p => String(p.id) === String(id));
+            if (!product) return;
+
+            const typeSelect = document.getElementById('new-item-type');
+            let typeHtml = `<option value="part">改装配件</option><option value="used_car">二手整车</option>`;
+            (window.customZones || []).forEach(z => {
+                typeHtml += `<option value="${z.id}">${escapeHTML(z.name)}</option>`;
+            });
+            typeSelect.innerHTML = typeHtml;
+
+            document.getElementById('edit-product-id').value = product.id;
+            const isUsedCar = product.category && product.category.startsWith('used_');
+            const isCustomZone = product.category && product.category.startsWith('zone_');
+
+            if (isUsedCar) document.getElementById('new-item-type').value = 'used_car';
+            else if (isCustomZone) document.getElementById('new-item-type').value = product.category;
+            else document.getElementById('new-item-type').value = 'part';
+
+            toggleAdminFormType();
+
+            const parsed = decodeProductName(product.name);
+            document.getElementById('new-name').value = parsed.name || '';
+            document.getElementById('new-price').value = product.price;
+            document.getElementById('new-image').value = '';
+            document.getElementById('new-badge').value = parsed.badge || '';
+            document.getElementById('new-stock').value = parsed.stock;
+
+            if (isUsedCar) {
+                document.getElementById('new-config').value = parsed.config || '';
+                const catSelect = document.getElementById('new-category');
+                const catExists = Array.from(catSelect.options).some(opt => opt.value === product.category);
+                if (catExists) {
+                    catSelect.value = product.category;
+                } else {
+                    catSelect.value = 'custom';
+                    document.getElementById('custom-category-input').style.display = 'block';
+                    document.getElementById('custom-category-input').value = product.category.replace('used_', '');
+                }
+            } else if (!isCustomZone) {
+                const catSelect = document.getElementById('new-category');
+                const catExists = Array.from(catSelect.options).some(opt => opt.value === product.category);
+                if (catExists) {
+                    catSelect.value = product.category;
+                } else {
+                    let catName = product.category;
+                    const oldCat = categories.find(c => c.id === product.category);
+                    if(oldCat) catName = oldCat.name;
+                    catSelect.innerHTML += `<option value="${product.category}">${escapeHTML(catName)} (已隐藏的分类)</option>`;
+                    catSelect.value = product.category;
+                }
+            }
+
+            const isInStock = product.in_stock !== false;
+            document.getElementById('new-instock').checked = isInStock;
+            toggleStockLabel(isInStock);
+
+            document.getElementById('new-ispinned').checked = parsed.isPinned;
+            togglePinLabel(parsed.isPinned);
+
+            currentUploadedUrls = product.image_url ? product.image_url.split(',').filter(Boolean) : [];
+            currentNewFiles = [];
+            urlsToDelete = [];
+            renderAdminImagePreview();
+
+            document.getElementById('admin-sheet-title').innerText = '编辑商品信息';
+            document.getElementById('submit-btn').innerText = '保存修改';
+            document.getElementById('delete-btn').style.display = 'block';
+            document.getElementById('admin-panel').classList.add('active');
+            document.getElementById('admin-overlay').classList.add('active');
+            toggleBodyScroll();
+        };
     </script>
 </body>
 </html>
