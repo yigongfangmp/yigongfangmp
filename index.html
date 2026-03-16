@@ -413,19 +413,29 @@
         <div class="content-inner">
             <div class="grid" id="products-grid"></div>
             <div id="empty-state-msg" style="display: none; grid-column: 1 / -1; text-align: center; color: var(--text-secondary); margin-top: 60px; font-weight: 400; font-size: 14px;">这页暂无待售商品，待老板后台上新~</div>
-        <div id="quote-block-wrap" style="margin-top: 40px; position: relative; overflow: hidden; text-align: center; color: var(--text-secondary); font-size: 13px; line-height: 1.8; background: var(--card-color); border-radius: var(--radius-lg); border: 0.5px solid var(--divider); box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+        <div id="quote-block-wrap" style="margin-top: 40px; position: relative; overflow: hidden; text-align: center; color: var(--text-secondary); font-size: 14px; line-height: 1.8; letter-spacing: 0.5px; background: var(--card-color); border-radius: var(--radius-lg); border: 0.5px solid var(--divider); box-shadow: 0 6px 24px rgba(0,0,0,0.05);">
 
-    <div id="quote-bg-img" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 240px; height: 240px; background-size: contain; background-position: center; background-repeat: no-repeat; opacity: 0.1; pointer-events: none; transition: background-image 0.4s ease; z-index: 0;"></div>
+    <div id="quote-bg-img" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; height: 90%; max-width: 400px; background-size: contain; background-position: center; background-repeat: no-repeat; opacity: 0.08; pointer-events: none; transition: background-image 0.4s ease; z-index: 0;"></div>
 
-    <div style="position: relative; z-index: 1; padding: 24px 20px;">
+    <div style="position: relative; z-index: 1; padding: 28px 24px;">
         <div style="width: 32px; height: 4px; background: var(--accent-color); border-radius: 2px; margin: 0 auto 16px;"></div>
-        <p style="margin-bottom: 12px;">“人们往往只看到街头呼啸而过的残影，<br>却鲜少看到我们在深夜车库里研究线路、升级卡钳时的专注。”</p>
-        <p style="margin-bottom: 12px;"><strong style="color: var(--text-primary);">‘电改无罪’</strong>，因为追求性能的极致、渴望风的自由，以及对机械美学的纯粹热爱，本就不是一种罪过。每一个定制的部件，每一段精心调校的电控代码，都是我们拒绝平庸、为这台钢铁机器注入灵魂的证明。</p>
-        <p>但真正的玩家都懂得：<strong style="color: var(--text-primary);">无罪的前提，是敬畏。</strong><br>改装是为了贴地飞行的从容，而不是失去理智的失控。把刹车改得比油门更灵敏，把对规则的尊重和对生命的安全刻在每一次拧动把手之前。只有守住安全的底线，这份对‘电改’的执着与热爱，才能真正在阳光下自由驰骋。</p>
+        
+        <p style="margin-bottom: 18px; font-size: 15px; font-weight: 600; color: var(--text-primary); font-style: italic;">
+            “人们往往只看到街头呼啸而过的残影，<br>却鲜少看到我们在深夜车库里研究线路、升级卡钳时的专注。”
+        </p>
+        
+        <p style="margin-bottom: 14px; font-weight: 500;">
+            <strong style="color: var(--text-primary); font-size: 15px;">‘电改无罪’</strong>，因为追求性能的极致、渴望风的自由，以及对机械美学的纯粹热爱，本就不是一种罪过。每一个定制的部件，每一段精心调校的电控代码，都是我们拒绝平庸、为这台钢铁机器注入灵魂的证明。
+        </p>
+        
+        <p style="font-weight: 500;">
+            但真正的玩家都懂得：<strong style="color: var(--text-primary); font-size: 15px;">无罪的前提，是敬畏。</strong><br>
+            改装是为了贴地飞行的从容，而不是失去理智的失控。把刹车改得比油门更灵敏，把对规则的尊重和对生命的安全刻在每一次拧动把手之前。只有守住安全的底线，这份对‘电改’的执着与热爱，才能真正在阳光下自由驰骋。
+        </p>
     </div>
 
     <button class="admin-only" onclick="document.getElementById('quote-bg-upload').click()" style="position: absolute; top: 12px; right: 12px; z-index: 2; background: rgba(0,0,0,0.5); color: #FFF; border: 0.5px solid rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; backdrop-filter: blur(4px);">
-        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>上传Logo水印
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>更换Logo水印
     </button>
     <input type="file" id="quote-bg-upload" accept="image/*" style="display:none" onchange="handleQuoteBgUpload(event)">
 </div>
