@@ -392,30 +392,39 @@
         .card:nth-child(7) { animation-delay: 0.35s; }
         .card:nth-child(8) { animation-delay: 0.4s; }
 
-        /* 4. 分类按钮科技胶囊化 */
+/* 4. 分类按钮科技胶囊化 (精致小巧版) */
         .filter-btn {
             border-radius: 100px; 
-            padding: 8px 16px;
+            padding: 5px 14px; /* 缩小了内边距，让按钮变瘦 */
+            font-size: 13px;   /* 字号稍微调小一号，显得更精致 */
             border: 1px solid var(--divider);
             background: var(--card-color);
+            margin: 0 2px;     /* 给按钮左右加上微小间距，防止最边缘阴影被切 */
+            transition: all 0.2s ease;
         }
         .filter-btn.active { 
             background: linear-gradient(135deg, var(--accent-color), #FF7B00); 
             color: #FFF; 
             border-color: transparent;
-            box-shadow: 0 4px 12px var(--accent-shadow); 
-            transform: scale(1.05); 
+            box-shadow: 0 4px 10px var(--accent-shadow); /* 稍微收敛了阴影扩散范围 */
+            transform: translateY(-1px); /* 取消了放大效果，改为微小的上浮，更清爽 */
         }
         :root.light-mode .filter-btn.active { color: #FFF; }
-/* 5. 修复分类胶囊按钮上下边缘被切割问题 */
+
+        /* 5. 修复滑动容器四周边角被切割问题 */
         .filter-scroll {
-            padding-top: 8px !important;      /* 给上方稍微放大留出空间 */
-            padding-bottom: 16px !important;  /* 给底部发光阴影留出充足空间 */
+            padding-top: 6px !important;      
+            padding-bottom: 14px !important;  
+            padding-left: 4px !important;  /* 强行撑开最左侧的阴影空间 */
             align-items: center;
         }
         @media (max-width: 768px) {
             .filter-bar {
-                padding-bottom: 0px !important; /* 抵消多出的高度，避免整个头部变太宽 */
+                padding-bottom: 0px !important; 
+            }
+            .filter-scroll {
+                margin-left: -4px; /* 抵消掉 padding-left 的位移，保持整体居中对齐 */
+                padding-right: 20px !important; /* 给最右侧留出滑动余量 */
             }
         }
     </style>
