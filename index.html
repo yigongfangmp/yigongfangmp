@@ -947,26 +947,26 @@ async function handleQuoteBgUpload(event) {
         }
 
         let scrollPosition = 0;
-        let scrollLockTimeout = null;
         
         function toggleBodyScroll() {
-            clearTimeout(scrollLockTimeout);
-            scrollLockTimeout = setTimeout(() => {
-                const activeModals = document.querySelectorAll('.modal-overlay.active, .cart-panel-overlay.active'); 
-                if (activeModals.length > 0) { 
-                    if (!document.body.classList.contains('no-scroll')) { 
-                        scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0; 
-                        document.body.style.top = `-${scrollPosition}px`; 
-                        document.body.classList.add('no-scroll'); 
-                    } 
-                } else { 
-                    if (document.body.classList.contains('no-scroll')) { 
-                        document.body.classList.remove('no-scroll'); 
-                        document.body.style.top = ''; 
-                        window.scrollTo(0, scrollPosition); 
-                    } 
-                }
-            }, 15);
+            const activeModals = document.querySelectorAll('.modal-overlay.active, .cart-panel-overlay.active'); 
+            if (activeModals.length > 0) { 
+                if (!document.body.classList.contains('no-scroll')) { 
+                    scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0; 
+                    document.body.style.top = `-${scrollPosition}px`; 
+                    document.body.classList.add('no-scroll'); 
+                } 
+            } else { 
+                if (document.body.classList.contains('no-scroll')) { 
+                    document.body.classList.remove('no-scroll'); 
+                    document.body.style.top = ''; 
+                    
+                    // 【经典老方法：强制读取 DOM 属性，逼迫 iOS 浏览器立刻重绘画面】
+                    void document.body.offsetHeight; 
+                    
+                    window.scrollTo(0, scrollPosition); 
+                } 
+            }
         }
 
         let imgScale = 1; let imgTranslateX = 0; let imgTranslateY = 0; let zoomInitDistance = 0; let zoomInitScale = 1; let zoomStartX = 0; let zoomStartY = 0; let isDraggingImg = false; let lastTapTime = 0;
