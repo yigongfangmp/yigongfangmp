@@ -870,7 +870,7 @@
             <div id="orders-content"></div>
         </div>
     </div>
-    <div class="cart-panel-overlay" id="admin-overlay" onclick="closeAdmin()"></div>
+<div class="cart-panel-overlay" id="admin-overlay" onclick="closeAdmin()"></div>
     <div class="cart-panel" id="admin-panel">
         <div class="cart-header">
             <span id="admin-sheet-title">上架新商品</span>
@@ -3151,14 +3151,6 @@
         }
         
         function parseFetchedData(allData) { 
-            const CDN_HOST = 'https://ik.imagekit.io/yigongfang'; 
-
-            allData.forEach(item => {
-                if (item.image_url) {
-                    item.image_url = item.image_url.replaceAll('https://jcwakdehorzivjbcxcmy.supabase.co', CDN_HOST);
-                }
-            });
-
             window.allRawProducts = allData;
 
             const bgData = allData.find(p => p.name === 'quote_bg_image' && p.category === '__deleted_category__');
@@ -3257,7 +3249,7 @@
                 
                 clearTimeout(timeoutId);
 
-                if (!response.ok) throw new Error();
+                if (!response.ok) throw new Error("HTTP Error " + response.status);
                 const allData = await response.json();
 
                 const newDataStr = JSON.stringify(allData);
@@ -3277,6 +3269,7 @@
                 }
 
             } catch (error) {
+                console.error("fetchProducts 失败:", error);
                 if (!hasRenderedCache) {
                     grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); margin-top: 60px;">获取数据失败，请检查网络...</div>';
                 }
@@ -3846,7 +3839,9 @@
                 setTimeout(() => { window.checkout = checkout; }, 50);
 
                 await fetchProducts(); 
-            } catch (err) {}
+            } catch (err) {
+                console.error("Initialization Failed:", err);
+            }
         });
     </script>
 </body>
