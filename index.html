@@ -4213,12 +4213,12 @@ window.openInstallPanel = function() {
                 window.getTodayInstallQueueNumber().then(num => {
                     window.currentInstallQueue = num; // 缓存
                     const el = document.getElementById('queue-number-display');
-                    if (el) el.innerHTML = `您将排在第 <span style="font-size:16px; color:#FFD700; font-weight:800; margin:0 2px;">${num}</span> 位`;
+                    if (el) el.innerHTML = `您预计排在第 <span style="font-size:16px; color:#FFD700; font-weight:800; margin:0 2px;">${num}</span> 位`;
                 }).finally(() => { window.isFetchingQueue = false; });
             } else if (window.currentInstallQueue) {
                 setTimeout(() => {
                     const el = document.getElementById('queue-number-display');
-                    if (el) el.innerHTML = `您将排在第 <span style="font-size:16px; color:#FFD700; font-weight:800; margin:0 2px;">${window.currentInstallQueue}</span> 位`;
+                    if (el) el.innerHTML = `您预计排在第 <span style="font-size:16px; color:#FFD700; font-weight:800; margin:0 2px;">${window.currentInstallQueue}</span> 位`;
                 }, 0);
             }
         };
