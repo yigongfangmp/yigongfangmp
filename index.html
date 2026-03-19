@@ -4320,7 +4320,7 @@ window.openInstallPanel = function() {
                 } catch(e) {}
 
                 try {
-                    const notifyText = `收到新的【自带件装车】预约！\n今日排号: 第 ${queueNum} 位\n工时费总计: ${finalTotalStr}\n客户联系: ${contactInfo}`;
+                    const notifyText = `收到新的【自带件装车】预约！\n预计排号: 第 ${queueNum} 位\n工时费总计: ${finalTotalStr}\n客户联系: ${contactInfo}`;
                     fetch('https://wxpusher.zjiecode.com/api/send/message', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -4345,7 +4345,7 @@ window.openInstallPanel = function() {
                     title: `<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; margin-top: 10px; padding-bottom: 6px;">
                                 <div style="font-size: 16px; color: var(--text-secondary); margin-bottom: 4px;">装车预约单已生成</div>
                                 <div style="font-size: 28px; font-weight: 900; color: var(--accent-color); letter-spacing: 1px;">
-                                    <span style="font-size: 16px; color: var(--text-primary);">今日排号:</span> 第 ${queueNum} 位
+                                    <span style="font-size: 16px; color: var(--text-primary);">预计排号:</span> 第 ${queueNum} 位
                                 </div>
                             </div>`,
                     desc: `
