@@ -638,6 +638,12 @@
         .location-fab:hover, .location-fab:active {
             box-shadow: none !important;
         }
+        /* ================= 优化日夜切换的丝滑度 ================= */
+        /* 仅在切换瞬间开启全局硬件加速过渡，平时关闭以节省性能 */
+        .theme-transitioning,
+        .theme-transitioning * {
+            transition: background-color 0.3s ease, background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+        }
     </style>
 </head>
 <body>
@@ -1910,13 +1916,24 @@ async function handleQuoteBgUpload(event) {
 
         function toggleTheme() { 
             triggerHaptic(); 
+
+            // 1. 切换前，瞬间加上全局丝滑过渡类
+            document.documentElement.classList.add('theme-transitioning');
+            
+            // 2. 执行主题切换
             const isLight = document.documentElement.classList.toggle('light-mode'); 
             try{ 
                 localStorage.setItem('user_theme', isLight ? 'light' : 'dark'); 
             } catch(e) { console.warn('LocalStorage Error:', e); } 
             
+            // 3. 更新状态栏颜色
             const meta = document.getElementById('theme-color-meta'); 
             if (meta) meta.setAttribute('content', isLight ? '#F5F5F9' : '#121212'); 
+
+            // 4. 动画结束后（300毫秒），移除过渡类，恢复原本的极致性能
+            setTimeout(() => {
+                document.documentElement.classList.remove('theme-transitioning');
+            }, 300);
         }
 
         function toggleStockLabel(isChecked) { 
