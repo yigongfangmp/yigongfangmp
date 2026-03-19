@@ -4097,12 +4097,13 @@ async function handleQuoteBgUpload(event) {
             return [...defaultCats, ...customPartsCats];
         }
 
-        window.openInstallPanel = function() {
+window.openInstallPanel = function() {
             closeAllPanels();
             document.getElementById('install-panel').classList.add('active');
             document.getElementById('install-overlay').classList.add('active');
             toggleBodyScroll();
-            installCart = {};
+            // 【修复 Bug 1：不再每次打开面板都清空购物车，改为清理排号缓存】
+            window.currentInstallQueue = null; 
             renderInstallPanel();
         }
 
@@ -4206,11 +4207,11 @@ async function handleQuoteBgUpload(event) {
             content.innerHTML = html;
             totalEl.innerText = totalFee.toFixed(2) + (hasNegotiable ? ' + 面议' : '');
 
-            // 触发排号自动获取
-            if (!window.isFetchingQueue) {
+            // 【修复 Bug 2：防止点加减号时疯狂请求 Supabase 数据库引发崩溃】
+            if (!window.isFetchingQueue && !window.currentInstallQueue) {
                 window.isFetchingQueue = true;
                 window.getTodayInstallQueueNumber().then(num => {
-                    window.currentInstallQueue = num; // 缓存一下
+                    window.currentInstallQueue = num; // 缓存
                     const el = document.getElementById('queue-number-display');
                     if (el) el.innerHTML = `您将排在第 <span style="font-size:16px; color:#FFD700; font-weight:800; margin:0 2px;">${num}</span> 位`;
                 }).finally(() => { window.isFetchingQueue = false; });
@@ -4267,7 +4268,8 @@ async function handleQuoteBgUpload(event) {
                     const cat = cats.find(c => c.id === id);
                     const name = cat ? cat.name : id;
                     const qty = installCart[id];
-                    const feeConfig = window.installFeesConfig[id];
+                    // 【修复 Bug 4：防崩溃容错处理】
+                    const feeConfig = (window.installFeesConfig || {})[id];
                     const price = feeConfig ? feeConfig.price : 0;
                     
                     if (price === -1) {
@@ -4332,6 +4334,9 @@ async function handleQuoteBgUpload(event) {
                     }).catch(e => {});
                 } catch(e) {}
 
+                // 【修复 Bug 3：生成订单后清空所选数量】
+                installCart = {};
+                
                 closeInstallPanel();
 
                 const qrImgSrc = qrCodeUrl ? escapeHTML(qrCodeUrl) : 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=weixin://contacts/profile/wxid_w5lxkhqtn06w22';
