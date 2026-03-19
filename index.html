@@ -604,7 +604,7 @@
     color: #FFFFFF !important;
     box-shadow: 0 12px 28px var(--accent-shadow) !important;
 }
-/* ================= 移除所有按钮阴影 ================= */
+/* ================= 移除所有按钮及特定卡片阴影 ================= */
         button, 
         .icon-btn, 
         .filter-btn, 
@@ -617,10 +617,19 @@
         .showcase-del-btn, 
         .del-gallery-btn,
         .install-fab,
-        .location-fab {
+        .location-fab,
+        .showcase-card { /* <- 已经把车友风云榜卡片加进来了 */
             box-shadow: none !important;
         }
 
+        /* 强制去除夜间模式下的专属悬浮发光效果（杀掉白光） */
+        :root:not(.light-mode) .install-fab,
+        :root:not(.light-mode) .location-fab,
+        :root:not(.light-mode) .fab-map-btn {
+            box-shadow: none !important;
+        }
+
+        /* 移除悬浮(hover)和点击(active)状态下动态生成的阴影 */
         button:hover, button:active,
         .checkout-btn:hover, .checkout-btn:active,
         .add-btn:hover, .add-btn:active,
