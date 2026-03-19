@@ -4122,16 +4122,22 @@ async function handleQuoteBgUpload(event) {
                 today.setHours(0, 0, 0, 0);
                 const startOfDay = today.toISOString();
                 
-                // 去数据库查询今天的全部订单
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=id,content&created_at=gte.${startOfDay}`, {
+                // 去数据库查询今天的订单：新增了 contact 字段用来判断状态，并过滤掉老板已归档的单子
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=id,content,contact&created_at=gte.${startOfDay}&is_archived=eq.false`, {
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
                 const orders = await res.json();
                 if (!Array.isArray(orders)) return 1;
                 
-                // 筛选出属于“自带件装车”的订单并计算数量
-                const installOrders = orders.filter(o => o.content && o.content.includes('自带件装车预约'));
-                return installOrders.length + 1; // 现在的数量 + 1 就是当前排号
+                // 核心修改：不仅要查“自带件装车”，还要查状态必须是 “[new]待处理” 的
+                const activeInstallOrders = orders.filter(o => {
+                    const isInstall = o.content && o.content.includes('自带件装车预约');
+                    const isNew = o.contact && o.contact.startsWith('[new]');
+                    return isInstall && isNew;
+                });
+                
+                // 还在等待处理的人数 + 1 = 你现在的实际排号
+                return activeInstallOrders.length + 1; 
             } catch(e) {
                 console.warn('获取排号失败，默认返回1', e);
                 return 1;
